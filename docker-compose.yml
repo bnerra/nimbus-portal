@@ -1,0 +1,44 @@
+# Local infrastructure for development.
+#
+# For now this runs only the things our code *depends on* (Postgres and Redis).
+# The API and web app run directly on your machine with `npm run dev`, which
+# gives faster reloads while we're building. In Phase 7 we'll add containers
+# for the API and web app too, so the whole stack can start with one command
+# and be deployed the same way.
+#
+# Host ports are 5433 and 6380 (not the defaults 5432 / 6379) so they won't
+# clash with a Postgres or Redis you may already have installed on Windows.
+
+name: nimbus-portal
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nimbus
+      POSTGRES_PASSWORD: nimbus_dev_password
+      POSTGRES_DB: nimbus
+    ports:
+      - '5433:5432'
+    volumes:
+      # Named volume = your data survives `docker compose down`.
+      # `npm run infra:reset` (down -v) wipes it for a clean slate.
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U nimbus -d nimbus']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6380:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

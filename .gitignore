@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+*.log
+
+# Local environment files hold secrets and machine-specific settings.
+.env
+.env.*
+!.env.example
+
+# Editor / OS clutter
+.DS_Store
+Thumbs.db
+.idea/

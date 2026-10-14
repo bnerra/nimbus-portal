@@ -1,0 +1,9 @@
+{
+  // Production build: compile only the app code (not tests) into dist/.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src"]
+}

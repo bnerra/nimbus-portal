@@ -1,0 +1,3 @@
+# Store text files with LF line endings in Git, even on Windows.
+# Prevents "every line changed" diffs and shell-script breakage in Docker.
+* text=auto eol=lf
