@@ -34,6 +34,16 @@ const FEED_SELECT = `
 // means bad requests get a clear 400 instead of reaching the database.
 const feedCodeSchema = z.string().regex(/^[A-Z0-9-]{2,20}$/, 'Invalid feed code');
 
+const REGIONS = ['NA', 'EMEA', 'APAC'];
+const regionSchema = z.enum(REGIONS);
+const optionalRegionSchema = z.preprocess((val) => {
+  if (typeof val !== 'string') return val;
+
+  const cleaned = val.trim().toUpperCase();
+
+  return cleaned === '' ? undefined : cleaned;
+}, regionSchema.optional());
+
 /**
  * Feed catalog: the products Nimbus sells. This is public, non-tenant data,
  * so no login is needed yet. Org-specific data (my subscriptions, my alerts)
@@ -43,14 +53,22 @@ export function feedsRouter(deps: { pool: pg.Pool }): Router {
   const router = Router();
 
   // GET /api/feeds
-  router.get('/', async (_req, res) => {
+  router.get('/', async (req, res) => {
+    const parsed = optionalRegionSchema.safeParse(req.query.region);
+    if (!parsed.success) {
+      throw new HttpError(400, 'invalid_region', `Valid regions are: ${REGIONS.join(', ')}`);
+    }
+
     // array_position gives a custom sort order (NA, EMEA, APAC) instead of
     // alphabetical (APAC, EMEA, NA).
     const { rows } = await deps.pool.query<Feed>(
       `${FEED_SELECT}
-       GROUP BY f.id
-       ORDER BY array_position(ARRAY['NA', 'EMEA', 'APAC'], f.region), f.venue, f.name`,
+        WHERE ($1::text IS NULL OR f.region = $1)
+        GROUP BY f.id
+        ORDER BY array_position($2::text[], f.region), f.venue, f.name`,
+      [parsed.data ?? null, REGIONS],
     );
+
     res.json({ feeds: rows });
   });
 

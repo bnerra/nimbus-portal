@@ -4,6 +4,11 @@ import { createApp } from '../src/app.js';
 import { config } from '../src/config.js';
 import { createPool } from '../src/db/pool.js';
 import { createRedis } from '../src/redis.js';
+import type { Feed } from '../src/routes/feeds.js';
+
+interface FeedsResponse {
+  feeds: Feed[];
+}
 
 const pool = createPool(config.DATABASE_URL);
 const redis = createRedis(config.REDIS_URL);
@@ -73,6 +78,40 @@ describe('GET /api/feeds/:code', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('invalid_feed_code');
+  });
+});
+
+describe('GET /api/feeds?region=...', () => {
+  it.each(['EMEA', 'emea', 'Emea', '%20emea%20'])(
+    'returns only EMEA feeds for ?region=%s',
+    async (region) => {
+      const res = await request(app).get(`/api/feeds?region=${region}`);
+      const body = res.body as FeedsResponse;
+
+      expect(res.status).toBe(200);
+      expect(body.feeds).toHaveLength(2);
+
+      body.feeds.forEach((feed) => {
+        expect(feed.region).toBe('EMEA');
+      });
+    },
+  );
+
+  it.each(['MARS', 'NA&region=EMEA'])('returns 400 for ?region=%s', async (region) => {
+    const res = await request(app).get(`/api/feeds?region=${region}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: { code: 'invalid_region', message: 'Valid regions are: NA, EMEA, APAC' },
+    });
+  });
+
+  it.each(['', '%20%20'])('treats ?region=%s as no filter', async (region) => {
+    const filtered = await request(app).get(`/api/feeds?region=${region}`);
+    const unfiltered = await request(app).get('/api/feeds');
+
+    expect(filtered.status).toBe(200);
+    expect(filtered.body).toEqual(unfiltered.body);
   });
 });
 
