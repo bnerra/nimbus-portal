@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { api, type Feed, type Region } from '../api';
 import { useApi } from '../useApi';
 
@@ -18,15 +18,13 @@ const ASSET_CLASS_LABELS: Record<Feed['assetClass'], string> = {
 
 /** The catalog of market data feeds Nimbus offers, with a region filter. */
 export function FeedCatalog() {
-  const feeds = useApi(api.getFeeds);
   const [region, setRegion] = useState<Region | 'ALL'>('ALL');
 
-  // Filtering happens in the browser: the catalog is small. For thousands
-  // of rows we'd filter on the server instead (a ?region= query parameter).
-  const visible = useMemo(
-    () => (feeds.data ?? []).filter((f) => region === 'ALL' || f.region === region),
-    [feeds.data, region],
+  const fetchFeeds = useCallback(
+    (signal: AbortSignal) => api.getFeeds(region === 'ALL' ? undefined : region, signal),
+    [region],
   );
+  const feeds = useApi(fetchFeeds);
 
   return (
     <section className="card" aria-labelledby="feeds-heading">
@@ -76,7 +74,7 @@ export function FeedCatalog() {
               </tr>
             </thead>
             <tbody>
-              {visible.map((feed) => (
+              {feeds.data.map((feed) => (
                 <tr key={feed.id}>
                   <td>
                     <code className="feed-code">{feed.code}</code>
@@ -92,7 +90,7 @@ export function FeedCatalog() {
                   <td className="num">{feed.subscriberCount}</td>
                 </tr>
               ))}
-              {visible.length === 0 && (
+              {feeds.data.length === 0 && (
                 <tr>
                   <td colSpan={6} className="empty">
                     No feeds in this region.

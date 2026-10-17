@@ -88,13 +88,20 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
 // --- Endpoints -------------------------------------------------------------
 
+function buildFeedsUrl(region?: Region): string {
+  const params = new URLSearchParams();
+  if (region) params.append('region', region);
+  const query = params.toString();
+  return query ? `/feeds?${query}` : '/feeds';
+}
+
 export const api = {
   // Health returns 503 when a dependency is down, but the body still says
   // exactly what's wrong, so treat 503 as a normal answer, not a failure.
   getHealth: (signal?: AbortSignal) => request<Health>('/health', { signal, alsoAccept: [503] }),
 
-  getFeeds: async (signal?: AbortSignal) => {
-    const data = await request<{ feeds: Feed[] }>('/feeds', { signal });
+  getFeeds: async (region?: Region, signal?: AbortSignal) => {
+    const data = await request<{ feeds: Feed[] }>(buildFeedsUrl(region), { signal });
     return data.feeds;
   },
 };
