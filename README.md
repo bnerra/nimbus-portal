@@ -111,7 +111,7 @@ nimbus-portal/
 
 - [x] **Phase 1: Foundation.** Monorepo, Docker Compose, migrations, seed data, health + feed
       catalog endpoints, integration tests, first React page.
-- [ ] **Phase 2: Simulator.** A service that generates fake feed metrics (latency, message
+- [x] **Phase 2: Simulator.** A service that generates fake feed metrics (latency, message
       rates, sequence numbers) and injects incidents.
 - [ ] **Phase 3: Dashboard.** Live-ish status page with polling, TanStack Query, latency charts.
 - [ ] **Phase 4: Real-time.** Server-Sent Events, reconnect with backoff + jitter, heartbeats,
@@ -131,3 +131,27 @@ nimbus-portal/
   containers aren't up. Run `npm run infra:up` and check `docker compose ps`.
 - **Port already in use:** something else is on 4000, 5173, 5433 or 6380. Change the port in
   `docker-compose.yml` / `apps/api/.env` / `apps/web/vite.config.ts` (keep them in sync).
+
+---
+
+## Running the simulator
+
+First time only (from `apps/simulator`, PowerShell):
+
+```powershell
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+Every time (Docker running, migrations applied):
+
+```powershell
+cd apps/simulator
+.venv\Scripts\Activate.ps1     # once per terminal; prompt shows (.venv)
+python main.py                 # Ctrl+C to stop
+python simulation.py           # preview the logic without a database
+```
+
+---
