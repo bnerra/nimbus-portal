@@ -123,3 +123,51 @@ describe('unknown routes', () => {
     expect(res.body.error.code).toBe('not_found');
   });
 });
+
+describe('GET /api/feeds/status', () => {
+  it('returns one status entry per feed with the expected shape', async () => {
+    const res = await request(app).get('/api/feeds/status');
+
+    expect(res.status).toBe(200);
+    expect(res.body.feeds).toHaveLength(8);
+    for (const feed of res.body.feeds) {
+      expect(['up', 'degraded', 'down', 'unknown']).toContain(feed.status);
+      expect(typeof feed.stale).toBe('boolean');
+    }
+  });
+
+  it("reports each feed's newest metric row", async () => {
+    // Insert a reading dated slightly in the future so it is guaranteed to be
+    // the newest row, even if the simulator is running while tests run.
+    const { rows } = await pool.query<{ id: string }>(
+      `INSERT INTO feed_metrics
+         (feed_id, recorded_at, status, latency_us, messages_per_sec, sequence_number, gap_count)
+       SELECT id, now() + interval '1 minute', 'degraded', 4321, 1234, 1, 7
+       FROM feeds WHERE code = 'NYSE-INT'
+       RETURNING id`,
+    );
+
+    try {
+      const res = await request(app).get('/api/feeds/status');
+      const nyse = res.body.feeds.find((f: { code: string }) => f.code === 'NYSE-INT');
+
+      expect(nyse).toMatchObject({
+        status: 'degraded',
+        latencyUs: 4321,
+        messagesPerSec: 1234,
+        gapCount: 7,
+        stale: false,
+      });
+    } finally {
+      // Clean up even if an assertion fails, so the fake row can't leak into other tests.
+      await pool.query('DELETE FROM feed_metrics WHERE id = $1', [rows[0]?.id]);
+    }
+  });
+
+  it('is not mistaken for a feed code', async () => {
+    // Regression guard for route order: '/status' must be matched before '/:code'.
+    const res = await request(app).get('/api/feeds/status');
+    expect(res.body.feed).toBeUndefined();
+    expect(res.body.feeds).toBeDefined();
+  });
+});
