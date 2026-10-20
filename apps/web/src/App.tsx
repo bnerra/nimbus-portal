@@ -1,5 +1,6 @@
 import { FeedCatalog } from './components/FeedCatalog';
 import { SystemHealth } from './components/SystemHealth';
+import { FeedStatusGrid } from './components/FeedStatusGrid';
 
 export function App() {
   return (
@@ -17,6 +18,7 @@ export function App() {
 
       <main className="content">
         <SystemHealth />
+        <FeedStatusGrid />
         <FeedCatalog />
       </main>
     </div>

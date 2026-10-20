@@ -1,12 +1,11 @@
-import { api, type CheckResult } from '../api';
-import { useApi } from '../useApi';
+import type { CheckResult } from '../api';
+import { useHealth } from '../queries';
 
 /**
- * Shows whether the API, database and Redis are reachable. In Phase 3 this
- * refreshes itself on a timer; in Phase 4 it updates live.
+ * Shows whether the API, database and Redis are reachable. Refreshes itself every 10 seconds (see useHealth); in Phase 4 it updates live.
  */
 export function SystemHealth() {
-  const health = useApi(api.getHealth);
+  const health = useHealth();
 
   return (
     <section className="card" aria-labelledby="health-heading">
@@ -15,10 +14,10 @@ export function SystemHealth() {
         <button
           type="button"
           className="button"
-          onClick={health.reload}
-          disabled={health.status === 'loading'}
+          onClick={() => health.refetch()}
+          disabled={health.isFetching}
         >
-          {health.status === 'loading' ? 'Checking…' : 'Refresh'}
+          {health.isFetching ? 'Checking…' : 'Refresh'}
         </button>
       </div>
 

@@ -15,6 +15,9 @@
   --up: #34d399;
   --down: #f87171;
   --down-soft: rgba(248, 113, 113, 0.12);
+  --degraded: #fbbf24;
+  --degraded-soft: rgba(251, 191, 36, 0.12);
+  --unknown: #64748b;
 
   --radius: 10px;
   --space-1: 4px;
@@ -257,6 +260,119 @@ body {
   align-items: center;
   gap: var(--space-2);
   flex-wrap: wrap;
+}
+
+/* ---- Live feed status ---------------------------------------------------- */
+
+.dot-degraded {
+  background: var(--degraded);
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.18);
+}
+
+.dot-unknown {
+  background: var(--unknown);
+}
+
+.alert-warning {
+  border-color: var(--degraded);
+  background: var(--degraded-soft);
+  margin-bottom: var(--space-3);
+}
+
+.status-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.status-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.status-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: var(--space-3);
+}
+
+.status-tile {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: var(--space-3) var(--space-4);
+  transition:
+    border-color 0.3s,
+    background-color 0.3s,
+    opacity 0.3s;
+}
+
+/* Problem tiles stand out by border + tint; the text label says why. */
+.status-tile[data-status='degraded'] {
+  border-color: var(--degraded);
+  background: var(--degraded-soft);
+}
+
+.status-tile[data-status='down'] {
+  border-color: var(--down);
+  background: var(--down-soft);
+}
+
+/* Stale = we don't actually know the current state, so fade it back. */
+.status-tile[data-stale='true'] {
+  opacity: 0.55;
+}
+
+.status-tile-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.status-tile-name {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+}
+
+.status-metrics dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.status-metrics dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  /* Equal-width digits, so numbers don't jiggle as they update. */
+  font-variant-numeric: tabular-nums;
+}
+
+.status-stale {
+  margin-top: var(--space-2);
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 /* ---- Table ---------------------------------------------------------------- */

@@ -29,6 +29,25 @@ export type Feed = {
   subscriberCount: number;
 };
 
+/** A feed's live condition. 'unknown' = no readings recorded yet. */
+export type FeedHealth = 'up' | 'degraded' | 'down' | 'unknown';
+
+export type FeedStatus = {
+  code: string;
+  name: string;
+  venue: string;
+  region: Region;
+  assetClass: Feed['assetClass'];
+  status: FeedHealth;
+  latencyUs: number | null;
+  messagesPerSec: number | null;
+  gapCount: number | null;
+  recordedAt: string | null;
+  stale: boolean;
+};
+
+export type FeedStatusResponse = { checkedAt: string; feeds: FeedStatus[] };
+
 // --- Errors ----------------------------------------------------------------
 
 /** Thrown for any non-2xx response, carrying the API's error code. */
@@ -104,4 +123,6 @@ export const api = {
     const data = await request<{ feeds: Feed[] }>(buildFeedsUrl(region), { signal });
     return data.feeds;
   },
+
+  getFeedStatus: (signal?: AbortSignal) => request<FeedStatusResponse>('/feeds/status', { signal }),
 };

@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react';
-import { api, type Feed, type Region } from '../api';
-import { useApi } from '../useApi';
+import { useState } from 'react';
+import type { Feed, Region } from '../api';
+import { useFeeds } from '../queries';
 
 const REGION_FILTERS: Array<{ value: Region | 'ALL'; label: string }> = [
   { value: 'ALL', label: 'All regions' },
@@ -20,11 +20,8 @@ const ASSET_CLASS_LABELS: Record<Feed['assetClass'], string> = {
 export function FeedCatalog() {
   const [region, setRegion] = useState<Region | 'ALL'>('ALL');
 
-  const fetchFeeds = useCallback(
-    (signal: AbortSignal) => api.getFeeds(region === 'ALL' ? undefined : region, signal),
-    [region],
-  );
-  const feeds = useApi(fetchFeeds);
+  // 'ALL' is a UI-only choice; the API just wants "no region filter".
+  const feeds = useFeeds(region === 'ALL' ? undefined : region);
 
   return (
     <section className="card" aria-labelledby="feeds-heading">
@@ -50,13 +47,14 @@ export function FeedCatalog() {
           <span>
             <strong>Couldn't load feeds.</strong> {feeds.error.message}
           </span>
-          <button type="button" className="button" onClick={feeds.reload}>
+          {/* CHANGED: reload → refetch */}
+          <button type="button" className="button" onClick={() => feeds.refetch()}>
             Try again
           </button>
         </div>
       )}
 
-      {feeds.status === 'loading' && !feeds.data && <p className="meta">Loading feeds…</p>}
+      {feeds.isPending && <p className="meta">Loading feeds…</p>}
 
       {feeds.data && (
         <div className="table-wrap">
