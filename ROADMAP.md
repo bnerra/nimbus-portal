@@ -5,6 +5,11 @@ nice-to-have features and learning goals. No deadlines; this project is about th
 
 **Current plan:** finish through Phase 5 ("quick path"), then evaluate what comes next.
 
+## Housekeeping
+
+- [ ] **After Phase 3:** update the README's "Project structure" diagram (add `apps/simulator`,
+      `docs/phase-2-walkthrough.md`, and the current `web/src` files).
+
 ## Nice to have
 
 - [ ] **SNS/SQS feature.** Only if it can run locally and for free (see LocalStack below) and has
