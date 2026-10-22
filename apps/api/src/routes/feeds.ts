@@ -88,6 +88,48 @@ const optionalRegionSchema = z.preprocess((val) => {
   return cleaned === '' ? undefined : cleaned;
 }, regionSchema.optional());
 
+// --- Metrics history --------------------------------------------------------
+
+/** One point on a feed's history chart: a time bucket's summary. */
+export type MetricPoint = {
+  t: string; // start of the bucket (ISO timestamp)
+  status: 'up' | 'degraded' | 'down'; // the WORST status seen in the bucket
+  avgLatencyUs: number | null; // null when the feed was down the whole bucket
+  maxLatencyUs: number | null;
+  messagesPerSec: number;
+  gapCount: number; // total gaps in the bucket
+};
+
+// The simulator keeps 60 minutes of history, so that's the most we can show.
+const metricsQuerySchema = z.object({
+  minutes: z.coerce.number().int().min(1).max(60).default(15),
+});
+
+// A chart only needs a few hundred points. 60 minutes of 1-second rows is
+// 3,600 points, so we group rows into time buckets and summarise each one.
+const MAX_POINTS = 180;
+
+// date_bin(size, ts, origin) rounds each timestamp DOWN to the start of its
+// bucket (e.g. 12:00:00, 12:00:05, 12:00:10 for 5-second buckets). Then
+// GROUP BY turns each bucket's rows into one summary row.
+const FEED_METRICS_SQL = `
+  SELECT date_bin(make_interval(secs => $3), m.recorded_at, TIMESTAMPTZ 'epoch') AS t,
+         CASE
+           WHEN bool_or(m.status = 'down')     THEN 'down'
+           WHEN bool_or(m.status = 'degraded') THEN 'degraded'
+           ELSE 'up'
+         END                                    AS status,
+         round(avg(m.latency_us))::int          AS "avgLatencyUs",
+         max(m.latency_us)                      AS "maxLatencyUs",
+         round(avg(m.messages_per_sec))::int    AS "messagesPerSec",
+         sum(m.gap_count)::int                  AS "gapCount"
+  FROM feed_metrics m
+  WHERE m.feed_id = $1
+    AND m.recorded_at >= now() - make_interval(mins => $2)
+  GROUP BY 1
+  ORDER BY 1
+`;
+
 /**
  * Feed catalog: the products Nimbus sells. This is public, non-tenant data,
  * so no login is needed yet. Org-specific data (my subscriptions, my alerts)
@@ -121,6 +163,43 @@ export function feedsRouter(deps: { pool: pg.Pool }): Router {
   router.get('/status', async (_req, res) => {
     const { rows } = await deps.pool.query<FeedStatus>(FEED_STATUS_SQL, [STALE_AFTER_SECONDS]);
     res.json({ checkedAt: new Date().toISOString(), feeds: rows });
+  });
+
+    // GET /api/feeds/:code/metrics?minutes=15
+  // Two path segments, so there's no clash with '/:code' (one segment).
+  router.get('/:code/metrics', async (req, res) => {
+    const code = feedCodeSchema.safeParse(req.params.code.toUpperCase());
+    if (!code.success) {
+      throw new HttpError(400, 'invalid_feed_code', 'Feed codes use letters, numbers and dashes');
+    }
+    const query = metricsQuerySchema.safeParse(req.query);
+    if (!query.success) {
+      throw new HttpError(400, 'invalid_minutes', 'minutes must be a whole number from 1 to 60');
+    }
+    const { minutes } = query.data;
+
+    // Look the feed up first so an unknown code is a clear 404, rather than
+    // an empty chart that looks like "no data yet".
+    const feedResult = await deps.pool.query<{ id: string; code: string; name: string }>(
+      'SELECT id, code, name FROM feeds WHERE code = $1',
+      [code.data],
+    );
+    const feed = feedResult.rows[0];
+    if (!feed) throw new HttpError(404, 'feed_not_found', `Feed ${code.data} not found`);
+
+    const bucketSeconds = Math.max(1, Math.ceil((minutes * 60) / MAX_POINTS));
+    const { rows } = await deps.pool.query<MetricPoint>(FEED_METRICS_SQL, [
+      feed.id,
+      minutes,
+      bucketSeconds,
+    ]);
+
+    res.json({
+      feed: { code: feed.code, name: feed.name },
+      minutes,
+      bucketSeconds,
+      points: rows,
+    });
   });
 
   // GET /api/feeds/:code

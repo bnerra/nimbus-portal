@@ -171,3 +171,58 @@ describe('GET /api/feeds/status', () => {
     expect(res.body.feeds).toBeDefined();
   });
 });
+
+describe('GET /api/feeds/:code/metrics', () => {
+  it('returns bucketed history for a feed', async () => {
+    const res = await request(app).get('/api/feeds/cme-mdp/metrics?minutes=15');
+
+    expect(res.status).toBe(200);
+    expect(res.body.feed.code).toBe('CME-MDP');
+    expect(res.body.minutes).toBe(15);
+    expect(res.body.bucketSeconds).toBe(5); // 15 min * 60 / 180 points
+    expect(Array.isArray(res.body.points)).toBe(true);
+  });
+
+  it('summarises each bucket: averages, max, and the worst status', async () => {
+    // Two readings in the same 5-second bucket, safely in the future so the
+    // running simulator can't add rows to that bucket.
+    const { rows } = await pool.query<{ id: string }>(
+      `INSERT INTO feed_metrics
+         (feed_id, recorded_at, status, latency_us, messages_per_sec, sequence_number, gap_count)
+       SELECT f.id, v.at, v.status, v.latency, v.rate, 1, v.gaps
+       FROM feeds f,
+            (VALUES (date_trunc('minute', now()) + interval '2 minutes',          'up',       100, 1000, 0),
+                    (date_trunc('minute', now()) + interval '2 minutes 1 second', 'degraded', 300, 3000, 4)
+            ) AS v(at, status, latency, rate, gaps)
+       WHERE f.code = 'JPX-FLEX'
+       RETURNING id`,
+    );
+
+    try {
+      const res = await request(app).get('/api/feeds/JPX-FLEX/metrics?minutes=15');
+      const last = res.body.points.at(-1);
+
+      expect(last).toMatchObject({
+        status: 'degraded', // worst of up + degraded
+        avgLatencyUs: 200,
+        maxLatencyUs: 300,
+        messagesPerSec: 2000,
+        gapCount: 4,
+      });
+    } finally {
+      await pool.query('DELETE FROM feed_metrics WHERE id = ANY($1)', [rows.map((r) => r.id)]);
+    }
+  });
+
+  it('returns 404 for an unknown feed', async () => {
+    const res = await request(app).get('/api/feeds/NOPE-123/metrics');
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('feed_not_found');
+  });
+
+  it('returns 400 for an out-of-range minutes value', async () => {
+    const res = await request(app).get('/api/feeds/CME-MDP/metrics?minutes=999');
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('invalid_minutes');
+  });
+});

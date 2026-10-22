@@ -124,6 +124,8 @@ nimbus-portal/
 - [ ] **Phase 8: AI assistant.** "Explain this alert": retrieval over runbooks, cited answers,
       tenant-scoped and read-only.
 
+Nice-to-have features and learning goals (like Terraform) are tracked in [ROADMAP.md](ROADMAP.md).
+
 ## Troubleshooting
 
 - **`Invalid environment configuration` on startup:** you skipped step 2; create `apps/api/.env`.
