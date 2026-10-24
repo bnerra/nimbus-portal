@@ -165,7 +165,7 @@ export function feedsRouter(deps: { pool: pg.Pool }): Router {
     res.json({ checkedAt: new Date().toISOString(), feeds: rows });
   });
 
-    // GET /api/feeds/:code/metrics?minutes=15
+  // GET /api/feeds/:code/metrics?minutes=15
   // Two path segments, so there's no clash with '/:code' (one segment).
   router.get('/:code/metrics', async (req, res) => {
     const code = feedCodeSchema.safeParse(req.params.code.toUpperCase());

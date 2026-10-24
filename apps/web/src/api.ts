@@ -48,6 +48,23 @@ export type FeedStatus = {
 
 export type FeedStatusResponse = { checkedAt: string; feeds: FeedStatus[] };
 
+/** One time bucket of a feed's history (see GET /api/feeds/:code/metrics). */
+export type MetricPoint = {
+  t: string;
+  status: 'up' | 'degraded' | 'down';
+  avgLatencyUs: number | null;
+  maxLatencyUs: number | null;
+  messagesPerSec: number;
+  gapCount: number;
+};
+
+export type FeedMetricsResponse = {
+  feed: { code: string; name: string };
+  minutes: number;
+  bucketSeconds: number;
+  points: MetricPoint[];
+};
+
 // --- Errors ----------------------------------------------------------------
 
 /** Thrown for any non-2xx response, carrying the API's error code. */
@@ -125,4 +142,9 @@ export const api = {
   },
 
   getFeedStatus: (signal?: AbortSignal) => request<FeedStatusResponse>('/feeds/status', { signal }),
+
+  getFeedMetrics: (code: string, minutes: number, signal?: AbortSignal) =>
+    request<FeedMetricsResponse>(`/feeds/${encodeURIComponent(code)}/metrics?minutes=${minutes}`, {
+      signal,
+    }),
 };

@@ -1,4 +1,5 @@
 import type { FeedHealth, FeedStatus } from '../api';
+import { formatLatency, formatRate } from '../format';
 import { useFeedStatus } from '../queries';
 
 const STATUS_LABELS: Record<FeedHealth, string> = {
@@ -8,11 +9,17 @@ const STATUS_LABELS: Record<FeedHealth, string> = {
   unknown: 'No data',
 };
 
+type Props = {
+  selectedCode: string | null;
+  onSelect: (code: string) => void;
+};
+
 /**
  * One tile per feed showing its latest reading. Polls every 3 seconds
  * (see useFeedStatus), so tiles change as the simulator injects incidents.
+ * Clicking a tile selects that feed for the latency chart.
  */
-export function FeedStatusGrid() {
+export function FeedStatusGrid({ selectedCode, onSelect }: Props) {
   const status = useFeedStatus();
   const feeds = status.data?.feeds ?? [];
 
@@ -51,7 +58,12 @@ export function FeedStatusGrid() {
         <>
           <ul className="status-grid">
             {feeds.map((feed) => (
-              <StatusTile key={feed.code} feed={feed} />
+              <StatusTile
+                key={feed.code}
+                feed={feed}
+                selected={feed.code === selectedCode}
+                onSelect={onSelect}
+              />
             ))}
           </ul>
           <p className="meta">
@@ -63,13 +75,35 @@ export function FeedStatusGrid() {
   );
 }
 
-function StatusTile({ feed }: { feed: FeedStatus }) {
+function StatusTile(props: {
+  feed: FeedStatus;
+  selected: boolean;
+  onSelect: (code: string) => void;
+}) {
+  const { feed, selected, onSelect } = props;
   return (
     // data-* attributes let the CSS style by status and staleness without
     // building class-name strings by hand.
-    <li className="status-tile" data-status={feed.status} data-stale={feed.stale}>
+    <li
+      className="status-tile"
+      data-status={feed.status}
+      data-stale={feed.stale}
+      data-selected={selected}
+    >
       <div className="status-tile-top">
-        <code className="feed-code">{feed.code}</code>
+        {/* The real button is just the feed code; CSS stretches its click
+            area over the whole tile (see .tile-select::after). A <button>
+            can't legally contain the <dl> below, so this keeps valid HTML
+            while the whole tile is still clickable and keyboard-focusable. */}
+        <button
+          type="button"
+          className="tile-select feed-code"
+          aria-pressed={selected}
+          aria-label={`Show latency for ${feed.code}, ${feed.name}`}
+          onClick={() => onSelect(feed.code)}
+        >
+          {feed.code}
+        </button>
         <span className="status-label">
           <span className={`dot dot-${feed.status}`} aria-hidden="true" />
           {STATUS_LABELS[feed.status]}
@@ -126,18 +160,4 @@ function StatusSummary({ feeds }: { feeds: FeedStatus[] }) {
         ))}
     </div>
   );
-}
-
-// Latency is stored in whole microseconds. Show µs for normal values and
-// switch to ms once it's large enough that µs digits stop being readable.
-function formatLatency(us: number | null): string {
-  if (us === null) return '—';
-  if (us < 1000) return `${us} µs`;
-  return `${(us / 1000).toFixed(1)} ms`;
-}
-
-function formatRate(n: number | null): string {
-  if (n === null) return '—';
-  if (n < 1000) return String(n);
-  return `${(n / 1000).toFixed(1)}k`;
 }

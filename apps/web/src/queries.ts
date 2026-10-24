@@ -13,6 +13,7 @@ export const queryKeys = {
   health: ['health'] as const,
   feeds: (region?: Region) => ['feeds', region ?? 'ALL'] as const,
   feedStatus: ['feedStatus'] as const,
+  feedMetrics: (code: string, minutes: number) => ['feedMetrics', code, minutes] as const,
 };
 
 /** API + database + Redis health. Re-checks every 10 seconds on its own. */
@@ -53,5 +54,21 @@ export function useFeedStatus() {
     queryKey: queryKeys.feedStatus,
     queryFn: ({ signal }) => api.getFeedStatus(signal),
     refetchInterval: 3_000,
+  });
+}
+
+/**
+ * One feed's latency history for the chart. Pass null when no feed is
+ * selected: `enabled: false` tells TanStack not to fetch at all.
+ */
+export function useFeedMetrics(code: string | null, minutes: number) {
+  return useQuery({
+    queryKey: queryKeys.feedMetrics(code ?? '', minutes),
+    queryFn: ({ signal }) => api.getFeedMetrics(code!, minutes, signal),
+    enabled: code !== null,
+    refetchInterval: 5_000,
+    // Switching feed or range keeps the old chart on screen (dimmed) until
+    // the new data arrives, instead of collapsing to "Loading…".
+    placeholderData: keepPreviousData,
   });
 }

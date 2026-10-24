@@ -1,8 +1,13 @@
+import { useState } from 'react';
 import { FeedCatalog } from './components/FeedCatalog';
+import { FeedLatencyChart } from './components/FeedLatencyChart';
 import { SystemHealth } from './components/SystemHealth';
 import { FeedStatusGrid } from './components/FeedStatusGrid';
 
 export function App() {
+  // Chart code state lives here, in the closest common parent: the grid SETS it, the chart READS it.
+  const [selectedCode, setSelectedCode] = useState<string | null>(null);
+
   return (
     <div className="app">
       <header className="topbar">
@@ -18,7 +23,8 @@ export function App() {
 
       <main className="content">
         <SystemHealth />
-        <FeedStatusGrid />
+        <FeedStatusGrid selectedCode={selectedCode} onSelect={setSelectedCode} />
+        <FeedLatencyChart code={selectedCode} />
         <FeedCatalog />
       </main>
     </div>
