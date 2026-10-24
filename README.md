@@ -113,7 +113,7 @@ nimbus-portal/
       catalog endpoints, integration tests, first React page.
 - [x] **Phase 2: Simulator.** A service that generates fake feed metrics (latency, message
       rates, sequence numbers) and injects incidents.
-- [ ] **Phase 3: Dashboard.** Live-ish status page with polling, TanStack Query, latency charts.
+- [x] **Phase 3: Dashboard.** Live-ish status page with polling, TanStack Query, latency charts.
 - [ ] **Phase 4: Real-time.** Server-Sent Events, reconnect with backoff + jitter, heartbeats,
       snapshot + deltas resync, stale-data indicators, Redis pub/sub across API instances.
 - [ ] **Phase 5: Auth & multi-tenancy.** Organizations, users, memberships, roles (RBAC),
