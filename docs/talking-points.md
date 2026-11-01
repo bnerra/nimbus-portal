@@ -25,13 +25,13 @@ zod · PostgreSQL 16 · Redis 7 · Python 3 (psycopg) · Docker Compose · Vites
 
 ## The phases in one line each
 
-| Phase | Theme | One line |
-| --- | --- | --- |
-| 1 | **Foundation** | Monorepo, API conventions (one error shape, input validation, migrations, dependency injection, real-DB tests), feed catalog UI |
-| 2 | **Data source** | Python simulator writing one health snapshot per feed per second, with injected incidents |
-| 3 | **Live dashboard** | SQL endpoints that summarize the data; a UI that polls, caches and visualizes it, with honest staleness |
-| 4 | **Real-time** _(next)_ | The server pushes updates (SSE + Redis Pub/Sub) instead of the browser asking |
-| 5 | **Auth & multi-tenancy** _(planned)_ | Logins; each client organization sees only its own subscriptions |
+| Phase | Theme                                | One line                                                                                                                        |
+| ----- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | **Foundation**                       | Monorepo, API conventions (one error shape, input validation, migrations, dependency injection, real-DB tests), feed catalog UI |
+| 2     | **Data source**                      | Python simulator writing one health snapshot per feed per second, with injected incidents                                       |
+| 3     | **Live dashboard**                   | SQL endpoints that summarize the data; a UI that polls, caches and visualizes it, with honest staleness                         |
+| 4     | **Real-time** _(next)_               | The server pushes updates (SSE + Redis Pub/Sub) instead of the browser asking                                                   |
+| 5     | **Auth & multi-tenancy** _(planned)_ | Logins; each client organization sees only its own subscriptions                                                                |
 
 ## Architecture (as of Phase 3)
 
@@ -95,12 +95,12 @@ Browser                    Server                        Database
  per user, in memory               shared by everyone
 ```
 
-| | TanStack | Redis |
-| --- | --- | --- |
-| Lives in | one user's browser tab | a shared server |
-| Shared by | one user | every user and every API instance |
-| Survives | until page refresh | API restarts |
-| Saves | network round trips | database work |
+|           | TanStack               | Redis                             |
+| --------- | ---------------------- | --------------------------------- |
+| Lives in  | one user's browser tab | a shared server                   |
+| Shared by | one user               | every user and every API instance |
+| Survives  | until page refresh     | API restarts                      |
+| Saves     | network round trips    | database work                     |
 
 **Likely follow-up:** _"There are only two hard things in computer science: cache invalidation and
 naming things."_ Both tools give the same two answers: **expire after time** (`staleTime`, TTL) or
@@ -120,12 +120,12 @@ naming things."_ Both tools give the same two answers: **expire after time** (`s
 
 ### Pub/sub vs message queue (SNS, SQS & friends)
 
-| Pattern | Delivery | Examples |
-| --- | --- | --- |
-| **Pub/sub** | every message to **every** subscriber; no backlog for the absent | Redis Pub/Sub, AWS SNS |
-| **Queue** | each message stored until **one** consumer handles it and **acks** | AWS SQS, RabbitMQ |
-| **Fan-out** | broadcast _and_ durable: each subscriber gets its own queue | SNS → several SQS queues |
-| **Log / stream** | kept for a while; each consumer tracks its position and can replay | Kafka, Redis Streams |
+| Pattern          | Delivery                                                           | Examples                 |
+| ---------------- | ------------------------------------------------------------------ | ------------------------ |
+| **Pub/sub**      | every message to **every** subscriber; no backlog for the absent   | Redis Pub/Sub, AWS SNS   |
+| **Queue**        | each message stored until **one** consumer handles it and **acks** | AWS SQS, RabbitMQ        |
+| **Fan-out**      | broadcast _and_ durable: each subscriber gets its own queue        | SNS → several SQS queues |
+| **Log / stream** | kept for a while; each consumer tracks its position and can replay | Kafka, Redis Streams     |
 
 **The deciding question:** _is a missed message a **problem**, or just **slightly out of date**?_
 

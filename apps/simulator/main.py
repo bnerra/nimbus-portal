@@ -14,6 +14,7 @@ import psycopg
 
 from config import Config, load_config
 from db import connect, delete_old_metrics, insert_metrics, last_sequence_numbers, load_feeds
+from publisher import TickPublisher
 from simulation import FeedState, initial_state, next_metric
 
 # Delete old rows once a minute (at 1 tick/second), not on every tick.
@@ -63,17 +64,20 @@ def main() -> None:
         )
         print("Press Ctrl+C to stop.\n")
 
+        publisher = TickPublisher(config.redis_url)
         try:
-            run(conn, states, config)
+            run(conn, states, config, publisher)
         except psycopg.OperationalError as error:
             # Postgres went away mid-run (e.g. `docker compose stop postgres`).
             print(f"\nLost the database connection: {error}", file=sys.stderr)
             sys.exit(1)
+        finally:
+            publisher.close()
 
     print("Simulator stopped.")
 
 
-def run(conn: psycopg.Connection, states: list[FeedState], config: Config) -> None:
+def run(conn: psycopg.Connection, states: list[FeedState], config: Config, publisher: TickPublisher) -> None:
     rng = random.Random()  # unseeded: different every run
     last_status = {state.feed.id: "up" for state in states}
 
@@ -85,6 +89,10 @@ def run(conn: psycopg.Connection, states: list[FeedState], config: Config) -> No
         metrics = [next_metric(state, config.tick_seconds, rng) for state in states]
         insert_metrics(conn, metrics)
 
+        # AFTER the insert has committed: "new data is ready, go read it".
+        # Publishing first would let a listener read the database too early.
+        listeners = publisher.publish(tick)
+
         # Only print when something changes, so the terminal stays readable.
         for state, metric in zip(states, metrics):
             previous = last_status[state.feed.id]
@@ -95,7 +103,10 @@ def run(conn: psycopg.Connection, states: list[FeedState], config: Config) -> No
 
         if tick % CLEANUP_EVERY_N_TICKS == 0:
             deleted = delete_old_metrics(conn, config.retention_minutes)
-            print(f"[tick {tick}] wrote {tick * len(states):,} rows so far; removed {deleted} old rows")
+            print(
+                f"[tick {tick}] wrote {tick * len(states):,} rows so far; removed {deleted} old rows; "
+                f"{listeners} live listener(s)"
+            )
 
         # Wait until the next tick is due. Scheduling from a fixed start time
         # (instead of sleeping a flat TICK_SECONDS) stops small delays from

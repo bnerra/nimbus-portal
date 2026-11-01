@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 @dataclass(frozen=True)
 class Config:
     database_url: str
+    redis_url: str
     tick_seconds: float
     retention_minutes: int
 
@@ -29,6 +30,10 @@ def load_config() -> Config:
     if not database_url.startswith(("postgres://", "postgresql://")):
         errors.append("DATABASE_URL must be set and start with postgres:// or postgresql://")
 
+    redis_url = os.environ.get("REDIS_URL", "")
+    if not redis_url.startswith(("redis://", "rediss://")):
+        errors.append("REDIS_URL must be set and start with redis:// or rediss://")
+
     tick_seconds = _read_number("TICK_SECONDS", default=1.0, errors=errors)
     retention_minutes = int(_read_number("RETENTION_MINUTES", default=60, errors=errors))
 
@@ -43,6 +48,7 @@ def load_config() -> Config:
         database_url=database_url,
         tick_seconds=tick_seconds,
         retention_minutes=retention_minutes,
+        redis_url=redis_url,
     )
 
 

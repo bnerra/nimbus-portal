@@ -12,19 +12,19 @@ Unlike earlier walkthroughs, this one leads with the plain-English ideas and wor
 
 ## What was built
 
-| File | Purpose |
-| --- | --- |
-| `apps/api/src/routes/feeds.ts` | `GET /api/feeds/status` and `GET /api/feeds/:code/metrics` |
-| `apps/api/test/api.test.ts` | Tests for both endpoints (shape, newest row, bucketing, 400/404) |
-| `apps/web/src/main.tsx` | Creates the `QueryClient` (the cache) and the devtools panel |
-| `apps/web/src/queries.ts` | Every data hook: `useHealth`, `useFeeds`, `useFeedStatus`, `useFeedMetrics` |
-| `apps/web/src/api.ts` | New response types + `getFeedStatus`, `getFeedMetrics` |
-| `apps/web/src/format.ts` | Shared `formatLatency` / `formatRate` |
-| `apps/web/src/components/FeedStatusGrid.tsx` | Live status tiles, summary, staleness banners, tile selection |
-| `apps/web/src/components/FeedLatencyChart.tsx` | Recharts latency chart with incident shading |
-| `apps/web/src/App.tsx` | Holds `selectedCode` (the feed picked in the grid) |
-| `apps/web/src/useApi.ts` | **Deleted**, replaced by TanStack Query |
-| `.vscode/settings.json` | Venv interpreter path; stops VS Code typing into your terminals |
+| File                                           | Purpose                                                                     |
+| ---------------------------------------------- | --------------------------------------------------------------------------- |
+| `apps/api/src/routes/feeds.ts`                 | `GET /api/feeds/status` and `GET /api/feeds/:code/metrics`                  |
+| `apps/api/test/api.test.ts`                    | Tests for both endpoints (shape, newest row, bucketing, 400/404)            |
+| `apps/web/src/main.tsx`                        | Creates the `QueryClient` (the cache) and the devtools panel                |
+| `apps/web/src/queries.ts`                      | Every data hook: `useHealth`, `useFeeds`, `useFeedStatus`, `useFeedMetrics` |
+| `apps/web/src/api.ts`                          | New response types + `getFeedStatus`, `getFeedMetrics`                      |
+| `apps/web/src/format.ts`                       | Shared `formatLatency` / `formatRate`                                       |
+| `apps/web/src/components/FeedStatusGrid.tsx`   | Live status tiles, summary, staleness banners, tile selection               |
+| `apps/web/src/components/FeedLatencyChart.tsx` | Recharts latency chart with incident shading                                |
+| `apps/web/src/App.tsx`                         | Holds `selectedCode` (the feed picked in the grid)                          |
+| `apps/web/src/useApi.ts`                       | **Deleted**, replaced by TanStack Query                                     |
+| `.vscode/settings.json`                        | Venv interpreter path; stops VS Code typing into your terminals             |
 
 New packages (web): `@tanstack/react-query`, `@tanstack/react-query-devtools`, `recharts`.
 
@@ -76,14 +76,14 @@ SystemHealth ── "I need ['health']"    ──►     │
   - freshness options: `refetchInterval` = "re-fetch every N ms no matter what" (monitoring data);
     `staleTime` = "data is good for N ms, don't bother re-fetching" (reference data).
 
-| Old `useApi` | TanStack `useQuery` | Meaning |
-| --- | --- | --- |
-| `status === 'loading' && !data` | `isPending` | No data yet (first load) |
-| `status === 'loading'` | `isFetching` | A request is in flight right now, even a background one |
-| `status === 'error'`, `error` | same | It failed |
-| `reload()` | `refetch()` | Fetch again now |
+| Old `useApi`                    | TanStack `useQuery` | Meaning                                                 |
+| ------------------------------- | ------------------- | ------------------------------------------------------- |
+| `status === 'loading' && !data` | `isPending`         | No data yet (first load)                                |
+| `status === 'loading'`          | `isFetching`        | A request is in flight right now, even a background one |
+| `status === 'error'`, `error`   | same                | It failed                                               |
+| `reload()`                      | `refetch()`         | Fetch again now                                         |
 
-**Why the region filter got simpler.** `useApi` re-fetched when its *function* changed, so the region
+**Why the region filter got simpler.** `useApi` re-fetched when its _function_ changed, so the region
 had to be smuggled in through `useCallback([region])`. With TanStack the region is **part of the
 key** (`['feeds', region]`): a new region is a new name, so the cache fetches it. No function identity
 to manage. Bonus: revisiting a region is instant (it's cached for 5 minutes).
@@ -91,7 +91,7 @@ to manage. Bonus: revisiting a region is instant (it's cached for 5 minutes).
 ### 2. A chain of caches (and why Redis is more than a cache)
 
 TanStack is a cache in the **browser** in front of the API; Redis can be a cache on the **server** in
-front of the database. Same pattern (*cache-aside*): look up by key → hit: use it → miss: fetch from the
+front of the database. Same pattern (_cache-aside_): look up by key → hit: use it → miss: fetch from the
 slower source and store it → expire after a while (`staleTime` ≈ Redis TTL).
 
 ```
@@ -119,11 +119,11 @@ queue. (The SNS → SQS "durable alert notifications" stretch phase is parked fo
 "Is the data current?" matters as much as the data itself. Two different failures get two different
 messages:
 
-| Situation | How we know | What the user sees |
-| --- | --- | --- |
-| The **API** is down | the request fails (`status.isError`) | red "Live status unavailable", last values kept on screen |
-| The API is fine, but **data stopped arriving** | `stale` flag from SQL (newest reading > 10 s old) | tiles fade, "Stale · last reading …", summary says "8 stale" |
-| **Every** feed is stale at once | all `stale: true` | one yellow banner: the *pipeline* stopped, not 8 separate outages |
+| Situation                                      | How we know                                       | What the user sees                                                |
+| ---------------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------- |
+| The **API** is down                            | the request fails (`status.isError`)              | red "Live status unavailable", last values kept on screen         |
+| The API is fine, but **data stopped arriving** | `stale` flag from SQL (newest reading > 10 s old) | tiles fade, "Stale · last reading …", summary says "8 stale"      |
+| **Every** feed is stale at once                | all `stale: true`                                 | one yellow banner: the _pipeline_ stopped, not 8 separate outages |
 
 Staleness is computed **in SQL with the database's clock** (`now()`), the same clock that stamped
 the rows, so differences between server clocks can't cause bugs.
@@ -149,13 +149,13 @@ time      status    latency_us
 12:00:09  up        95   ┘
 ```
 
-| | `avg(latency_us)` | `max(latency_us)` | worst status |
-| --- | --- | --- | --- |
-| **12:00:00** | (100+120+900+110+100) ÷ 5 = **266** | **900** | **degraded** |
-| **12:00:05** | NULLs skipped: (105+115+95) ÷ 3 = **105** | **115** | **down** |
+|              | `avg(latency_us)`                         | `max(latency_us)` | worst status |
+| ------------ | ----------------------------------------- | ----------------- | ------------ |
+| **12:00:00** | (100+120+900+110+100) ÷ 5 = **266**       | **900**           | **degraded** |
+| **12:00:05** | NULLs skipped: (105+115+95) ÷ 3 = **105** | **115**           | **down**     |
 
 10 rows in, 2 rows out. **Worst** status, not most common, so a 1-second outage can never be averaged
-away. A bucket where the feed was down the *whole* time gets `avg = NULL`, which the chart draws as a
+away. A bucket where the feed was down the _whole_ time gets `avg = NULL`, which the chart draws as a
 **gap**, not a fake zero.
 
 ### 5. Lifting state up
@@ -169,7 +169,7 @@ App   ← holds: selectedCode
 └── FeedLatencyChart gets code       → reads it and fetches that feed
 ```
 
-The flip side: **lift state only as high as needed.** The chart's 5/15/60-minute range lives *inside*
+The flip side: **lift state only as high as needed.** The chart's 5/15/60-minute range lives _inside_
 the chart, because nothing else cares about it.
 
 ---
@@ -204,7 +204,7 @@ the chart, because nothing else cares about it.
 - `<dl>/<dt>/<dd>` is the semantic element for label/value pairs.
 - `data-status`, `data-stale`, `data-selected` attributes drive the CSS (`[data-status='down']`).
 - **No `aria-live`** on tiles: screen readers would read 24 numbers every 3 seconds (Phase 4: announce
-  only *changes*).
+  only _changes_).
 
 ### Step 4a: `GET /api/feeds/:code/metrics?minutes=15`
 
@@ -243,7 +243,7 @@ the chart, because nothing else cares about it.
   older `getFeeds()` without the region parameter. Fixed by putting the region in the query key
   (`useFeeds(region)`), which also removed the `useCallback`.
 - **"SIGINT received" / "Terminate batch job (Y/N)?" killing `npm run dev`.** VS Code's Python
-  extension auto-activated the venv by typing into the *already-running* npm terminal. The clue was
+  extension auto-activated the venv by typing into the _already-running_ npm terminal. The clue was
   a line you didn't type: `(Set-ExecutionPolicy ...) ; (& ...Activate.ps1)`. Fix, in
   `.vscode/settings.json`:
 
@@ -256,6 +256,7 @@ the chart, because nothing else cares about it.
 
   Habit: when something stops unexpectedly, find the **first line that isn't yours**. "Exited with
   code 1" means "something stopped me", not "my code crashed".
+
 - **`npm run build` warns about a chunk > 500 kB.** That's Recharts. Only a warning; code-splitting is
   a later optimization.
 
@@ -263,21 +264,21 @@ the chart, because nothing else cares about it.
 
 ## SQL cheat sheet (from the DBeaver session)
 
-| Concept | Example | Plain English |
-| --- | --- | --- |
-| Join | `FROM feed_metrics m JOIN feeds f ON f.id = m.feed_id` | Metrics only store a `feed_id`; join to `feeds` to filter by the human-readable `code` (normalization) |
-| Logical order | FROM → WHERE → GROUP BY → SELECT → ORDER BY → LIMIT | Written SELECT-first, evaluated FROM-first; that's why `WHERE` can't use a `SELECT` alias |
-| `date_bin` | `date_bin('5 seconds', recorded_at, TIMESTAMPTZ 'epoch')` | Round each timestamp **down** to its 5-second slot on a fixed grid starting at 1970-01-01 |
-| Fixed origin | `'epoch'`, not `now()` | `now()` would shift the grid every query and make the chart jitter |
-| `GROUP BY 1` | | Group by **column #1 of the SELECT**; same as `GROUP BY bucket` |
-| The GROUP BY rule | | Every selected column is either grouped by or an aggregate, or Postgres refuses: "must appear in the GROUP BY clause or be used in an aggregate function" |
-| Aggregates | `count(*)`, `avg`, `max`, `sum` | Squash a pile into one value. `avg` skips NULLs. No `GROUP BY` → the whole table is one pile |
-| `bool_or` | `bool_or(status = 'down')` | "Was the condition true for **any** row in the pile?" |
-| `CASE` | `CASE WHEN ... THEN ... ELSE ... END` | if / else-if / else; first true `WHEN` wins |
-| `LIMIT` after `GROUP BY` | `LIMIT 10` | 10 **buckets**, not 10 rows |
-| `LEFT JOIN LATERAL` | | "For each row on the left, run this subquery"; ideal for "newest row per group" |
-| `COALESCE` | `COALESCE(m.status, 'unknown')` | First non-NULL value |
-| `::int` | `sum(gap_count)::int` | node-pg returns `bigint`/`numeric` as strings; cast when the value is safely small |
+| Concept                  | Example                                                   | Plain English                                                                                                                                             |
+| ------------------------ | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Join                     | `FROM feed_metrics m JOIN feeds f ON f.id = m.feed_id`    | Metrics only store a `feed_id`; join to `feeds` to filter by the human-readable `code` (normalization)                                                    |
+| Logical order            | FROM → WHERE → GROUP BY → SELECT → ORDER BY → LIMIT       | Written SELECT-first, evaluated FROM-first; that's why `WHERE` can't use a `SELECT` alias                                                                 |
+| `date_bin`               | `date_bin('5 seconds', recorded_at, TIMESTAMPTZ 'epoch')` | Round each timestamp **down** to its 5-second slot on a fixed grid starting at 1970-01-01                                                                 |
+| Fixed origin             | `'epoch'`, not `now()`                                    | `now()` would shift the grid every query and make the chart jitter                                                                                        |
+| `GROUP BY 1`             |                                                           | Group by **column #1 of the SELECT**; same as `GROUP BY bucket`                                                                                           |
+| The GROUP BY rule        |                                                           | Every selected column is either grouped by or an aggregate, or Postgres refuses: "must appear in the GROUP BY clause or be used in an aggregate function" |
+| Aggregates               | `count(*)`, `avg`, `max`, `sum`                           | Squash a pile into one value. `avg` skips NULLs. No `GROUP BY` → the whole table is one pile                                                              |
+| `bool_or`                | `bool_or(status = 'down')`                                | "Was the condition true for **any** row in the pile?"                                                                                                     |
+| `CASE`                   | `CASE WHEN ... THEN ... ELSE ... END`                     | if / else-if / else; first true `WHEN` wins                                                                                                               |
+| `LIMIT` after `GROUP BY` | `LIMIT 10`                                                | 10 **buckets**, not 10 rows                                                                                                                               |
+| `LEFT JOIN LATERAL`      |                                                           | "For each row on the left, run this subquery"; ideal for "newest row per group"                                                                           |
+| `COALESCE`               | `COALESCE(m.status, 'unknown')`                           | First non-NULL value                                                                                                                                      |
+| `::int`                  | `sum(gap_count)::int`                                     | node-pg returns `bigint`/`numeric` as strings; cast when the value is safely small                                                                        |
 
 ---
 
@@ -292,7 +293,7 @@ Answer out loud or in writing first, then compare with the answer key below.
 5. Why is fire-and-forget pub/sub acceptable for live status, but not for alert emails?
 6. Why does `/status` have to be registered before `/:code`, but `/:code/metrics` doesn't?
 7. How does the dashboard tell "the API is down" apart from "the data stopped arriving"?
-8. Walk through how 3,600 rows become ~180 chart points. Why the *worst* status per bucket?
+8. Walk through how 3,600 rows become ~180 chart points. Why the _worst_ status per bucket?
 9. Why does an outage appear as a gap in the chart rather than a drop to zero?
 10. How do the status grid and the chart share the selected feed?
 
@@ -310,7 +311,7 @@ Pick one or more:
    `up, degraded, degraded, up, down` produces two incidents with the right `from`/`to`.
 5. **Configurable staleness.** Move `STALE_AFTER_SECONDS` into `config.ts` (zod, default 10).
 6. **Announce changes, not numbers.** A visually hidden `aria-live="polite"` region that says
-   "EUREX-EOBI is down" only when a feed's status *changes*.
+   "EUREX-EOBI is down" only when a feed's status _changes_.
 
 ## Known shortcuts (deliberate)
 
