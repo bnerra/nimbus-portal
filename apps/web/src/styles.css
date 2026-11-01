@@ -546,3 +546,56 @@ body {
     padding: var(--space-4);
   }
 }
+
+/* ---- Live badge ---------------------------------------------------------- */
+
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: var(--space-2);
+  padding: 1px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  vertical-align: 2px;
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--unknown);
+}
+
+.live-badge[data-state='live'] {
+  color: var(--up);
+}
+
+.live-badge[data-state='live'] .live-dot {
+  background: var(--up);
+  animation: live-pulse 2s ease-in-out infinite;
+}
+
+.live-badge[data-state='reconnecting'] {
+  color: var(--degraded);
+}
+
+.live-badge[data-state='reconnecting'] .live-dot {
+  background: var(--degraded);
+}
+
+@keyframes live-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Respect the OS "reduce motion" setting: no pulsing. */
+@media (prefers-reduced-motion: reduce) {
+  .live-badge[data-state='live'] .live-dot {
+    animation: none;
+  }
+}

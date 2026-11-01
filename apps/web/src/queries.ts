@@ -45,15 +45,18 @@ export function useFeeds(region?: Region) {
 }
 
 /**
- * Every feed's latest health reading. The simulator writes once a second;
- * polling every 3 seconds keeps the tiles close to live without hammering
- * the API. (Phase 4 replaces polling with server push.)
+ * Every feed's latest health reading.
+ *
+ * While the live stream is connected (see useLiveFeedStatus), the server
+ * pushes fresh data into this query's cache, so there's nothing to poll.
+ * If the stream drops, polling every 3 seconds takes over as a fallback.
  */
-export function useFeedStatus() {
+export function useFeedStatus({ live }: { live: boolean }) {
   return useQuery({
     queryKey: queryKeys.feedStatus,
     queryFn: ({ signal }) => api.getFeedStatus(signal),
-    refetchInterval: 3_000,
+    refetchInterval: live ? false : 3_000,
+    refetchOnWindowFocus: !live,
   });
 }
 

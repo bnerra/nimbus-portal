@@ -1,6 +1,7 @@
 import type { FeedHealth, FeedStatus } from '../api';
 import { formatLatency, formatRate } from '../format';
 import { useFeedStatus } from '../queries';
+import { type LiveState, useLiveFeedStatus } from '../useLiveFeedStatus';
 
 const STATUS_LABELS: Record<FeedHealth, string> = {
   up: 'Up',
@@ -15,12 +16,13 @@ type Props = {
 };
 
 /**
- * One tile per feed showing its latest reading. Polls every 3 seconds
- * (see useFeedStatus), so tiles change as the simulator injects incidents.
+ * One tile per feed showing its latest reading. Updates are pushed live with polling as the fallback,
+ * so tiles change as the simulator injects incidents.
  * Clicking a tile selects that feed for the latency chart.
  */
 export function FeedStatusGrid({ selectedCode, onSelect }: Props) {
-  const status = useFeedStatus();
+  const liveState = useLiveFeedStatus();
+  const status = useFeedStatus({ live: liveState === 'live' });
   const feeds = status.data?.feeds ?? [];
 
   // If EVERY feed is stale, the problem is upstream (the monitoring pipeline
@@ -30,7 +32,9 @@ export function FeedStatusGrid({ selectedCode, onSelect }: Props) {
   return (
     <section className="card" aria-labelledby="status-heading">
       <div className="card-header">
-        <h2 id="status-heading">Live feed status</h2>
+        <h2 id="status-heading">
+          Live feed status <LiveBadge state={liveState} />
+        </h2>
         {feeds.length > 0 && <StatusSummary feeds={feeds} />}
       </div>
 
@@ -67,11 +71,23 @@ export function FeedStatusGrid({ selectedCode, onSelect }: Props) {
             ))}
           </ul>
           <p className="meta">
-            Updated {new Date(status.data.checkedAt).toLocaleTimeString()} · refreshes every 3s
+            Updated {new Date(status.data.checkedAt).toLocaleTimeString()} ·{' '}
+            {liveState === 'live' ? 'pushed live by the server' : 'polling every 3s'}
           </p>
         </>
       )}
     </section>
+  );
+}
+
+/** "Live" when updates are being pushed; otherwise says what's happening. */
+function LiveBadge({ state }: { state: LiveState }) {
+  const label = { live: 'Live', connecting: 'Connecting…', reconnecting: 'Reconnecting…' }[state];
+  return (
+    <span className="live-badge" data-state={state}>
+      <span className="live-dot" aria-hidden="true" />
+      {label}
+    </span>
   );
 }
 
