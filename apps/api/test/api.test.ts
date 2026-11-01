@@ -1,9 +1,11 @@
+import type { AddressInfo } from 'node:net';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
 import { config } from '../src/config.js';
 import { createPool } from '../src/db/pool.js';
-import { createRedis } from '../src/redis.js';
+import { STATUS_CHANNEL, StatusBroadcaster } from '../src/realtime/statusBroadcaster.js';
+import { createRedis, createSubscriber } from '../src/redis.js';
 import type { Feed } from '../src/routes/feeds.js';
 
 interface FeedsResponse {
@@ -12,18 +14,21 @@ interface FeedsResponse {
 
 const pool = createPool(config.DATABASE_URL);
 const redis = createRedis(config.REDIS_URL);
+const broadcaster = new StatusBroadcaster(pool, createSubscriber(config.REDIS_URL));
 // supertest calls the app in-process: no port, no running server needed.
-const app = createApp({ pool, redis });
+const app = createApp({ pool, redis, broadcaster });
 
 // The Redis client connects in the background. Wait until it's ready, or the
 // first health check could honestly (but unhelpfully) report Redis as down.
 beforeAll(async () => {
   if (redis.status !== 'ready') {
     await new Promise<void>((resolve) => redis.once('ready', () => resolve()));
+    await broadcaster.start();
   }
 });
 
 afterAll(async () => {
+  await broadcaster.close();
   await pool.end();
   await redis.quit();
 });
@@ -224,5 +229,86 @@ describe('GET /api/feeds/:code/metrics', () => {
     const res = await request(app).get('/api/feeds/CME-MDP/metrics?minutes=999');
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('invalid_minutes');
+  });
+});
+
+describe('GET /api/feeds/status/stream (Server-Sent Events)', () => {
+  // supertest waits for a response to END, and a live stream never ends.
+  // So these tests start a real server on a random free port and read the
+  // stream with fetch, one chunk at a time.
+  async function openStream() {
+    const server = app.listen(0);
+    await new Promise<void>((resolve) => server.once('listening', () => resolve()));
+    const { port } = server.address() as AddressInfo;
+
+    const controller = new AbortController();
+    const res = await fetch(`http://localhost:${port}/api/feeds/status/stream`, {
+      signal: controller.signal,
+    });
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    /** Resolve with the next complete "status" event's data. */
+    async function nextStatus(): Promise<{ feeds: unknown[] }> {
+      for (;;) {
+        const end = buffer.indexOf('\n\n');
+        if (end !== -1) {
+          const block = buffer.slice(0, end);
+          buffer = buffer.slice(end + 2);
+          const data = block.split('\n').find((line) => line.startsWith('data: '));
+          if (block.includes('event: status') && data) return JSON.parse(data.slice(6));
+          continue; // e.g. the "retry:" block
+        }
+        const { value, done } = await reader.read();
+        if (done) throw new Error('stream ended');
+        buffer += decoder.decode(value, { stream: true });
+      }
+    }
+
+    async function close() {
+      controller.abort();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+
+    return { res, nextStatus, close };
+  }
+
+  it('sends an event-stream with the current status straight away', async () => {
+    const stream = await openStream();
+    try {
+      expect(stream.res.status).toBe(200);
+      expect(stream.res.headers.get('content-type')).toBe('text/event-stream');
+
+      const first = await stream.nextStatus();
+      expect(first.feeds).toHaveLength(8);
+    } finally {
+      await stream.close();
+    }
+  });
+
+  it('pushes a fresh snapshot when a tick is announced on Redis', async () => {
+    const stream = await openStream();
+    try {
+      await stream.nextStatus(); // the initial snapshot
+
+      // Pretend to be the simulator: announce a tick on the channel.
+      await redis.publish(STATUS_CHANNEL, JSON.stringify({ tick: 1 }));
+
+      const pushed = await stream.nextStatus();
+      expect(pushed.feeds).toHaveLength(8);
+    } finally {
+      await stream.close();
+    }
+  });
+
+  it('forgets clients that disconnect', async () => {
+    const stream = await openStream();
+    await stream.nextStatus();
+    expect(broadcaster.clientCount).toBe(1);
+
+    await stream.close();
+    await new Promise((resolve) => setTimeout(resolve, 50)); // let 'close' fire
+    expect(broadcaster.clientCount).toBe(0);
   });
 });

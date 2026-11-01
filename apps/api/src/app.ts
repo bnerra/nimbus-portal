@@ -1,6 +1,7 @@
 import express, { type Express } from 'express';
 import type { Redis } from 'ioredis';
 import type pg from 'pg';
+import type { StatusBroadcaster } from './realtime/statusBroadcaster.js';
 import { errorHandler, notFoundHandler } from './errors.js';
 import { feedsRouter } from './routes/feeds.js';
 import { healthRouter } from './routes/health.js';
@@ -8,6 +9,7 @@ import { healthRouter } from './routes/health.js';
 export type AppDeps = {
   pool: pg.Pool;
   redis: Redis;
+  broadcaster: StatusBroadcaster;
 };
 
 /**
