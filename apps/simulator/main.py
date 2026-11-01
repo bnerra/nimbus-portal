@@ -77,7 +77,9 @@ def main() -> None:
     print("Simulator stopped.")
 
 
-def run(conn: psycopg.Connection, states: list[FeedState], config: Config, publisher: TickPublisher) -> None:
+def run(
+    conn: psycopg.Connection, states: list[FeedState], config: Config, publisher: TickPublisher
+) -> None:
     rng = random.Random()  # unseeded: different every run
     last_status = {state.feed.id: "up" for state in states}
 
@@ -104,8 +106,8 @@ def run(conn: psycopg.Connection, states: list[FeedState], config: Config, publi
         if tick % CLEANUP_EVERY_N_TICKS == 0:
             deleted = delete_old_metrics(conn, config.retention_minutes)
             print(
-                f"[tick {tick}] wrote {tick * len(states):,} rows so far; removed {deleted} old rows; "
-                f"{listeners} live listener(s)"
+                f"[tick {tick}] wrote {tick * len(states):,} rows so far; "
+                f"removed {deleted} old rows; {listeners} live listener(s)"
             )
 
         # Wait until the next tick is due. Scheduling from a fixed start time

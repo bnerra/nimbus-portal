@@ -50,8 +50,14 @@ def insert_metrics(conn: psycopg.Connection, metrics: list[Metric]) -> None:
                 VALUES (%s, %s, %s, %s, %s, %s)
                 """,
                 [
-                    (m.feed_id, m.status, m.latency_us, m.messages_per_sec,
-                     m.sequence_number, m.gap_count)
+                    (
+                        m.feed_id,
+                        m.status,
+                        m.latency_us,
+                        m.messages_per_sec,
+                        m.sequence_number,
+                        m.gap_count,
+                    )
                     for m in metrics
                 ],
             )

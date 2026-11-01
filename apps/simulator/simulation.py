@@ -137,7 +137,7 @@ if __name__ == "__main__":
     demo_rng = random.Random(42)  # fixed seed: same output every run
     state = initial_state(Feed(id=uuid4(), code="DEMO-FEED"))
     print(f"DEMO-FEED normal: ~{state.base_latency_us} µs, ~{state.base_rate:,} msg/s\n")
-    print(f"{'tick':>4}  {'status':<9} {'latency_us':>10} {'msg/s':>8} {'gaps':>5} {'sequence':>12}")
+    print(f"{'tick':>4} {'status':<9} {'latency_us':>10} {'msg/s':>8} {'gaps':>5} {'sequence':>12}")
 
     for tick in range(1, 31):
         if tick == 8:

@@ -1,0 +1,14 @@
+# Ruff: Python linter + formatter (the Python counterpart of Prettier/ESLint).
+# Used by the VS Code Ruff extension on save, or from the command line.
+
+# Match Prettier's printWidth in the TypeScript code.
+line-length = 100
+
+[lint]
+# E/W = PEP 8 style, F = real bugs (unused imports, undefined names), I = import order.
+select = ["E", "W", "F", "I"]
+
+[format]
+# Defaults shown for clarity: 4-space indents, double quotes (Black style).
+indent-style = "space"
+quote-style = "double"
