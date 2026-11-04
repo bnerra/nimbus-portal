@@ -4,7 +4,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
 import { config } from '../src/config.js';
 import { createPool } from '../src/db/pool.js';
-import { STATUS_CHANNEL, StatusBroadcaster } from '../src/realtime/statusBroadcaster.js';
+import {
+  STATUS_CHANNEL,
+  StatusBroadcaster,
+  type StatusEvent,
+} from '../src/realtime/statusBroadcaster.js';
 import { createRedis, createSubscriber } from '../src/redis.js';
 import type { Feed } from '../src/routes/feeds.js';
 
@@ -22,7 +26,14 @@ const app = createApp({ pool, redis, broadcaster });
 // first health check could honestly (but unhelpfully) report Redis as down.
 beforeAll(async () => {
   if (redis.status !== 'ready') {
-    await new Promise<void>((resolve) => redis.once('ready', () => resolve()));
+    await new Promise<void>((resolve, reject) => {
+      redis.once('ready', () => resolve());
+      setTimeout(
+        () =>
+          reject(new Error('Redis is not reachable. Is Docker running? Try `docker compose ps`.')),
+        5_000,
+      );
+    });
     await broadcaster.start();
   }
 });
@@ -30,7 +41,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await broadcaster.close();
   await pool.end();
-  await redis.quit();
+  await redis.quit().catch(() => redis.disconnect());
 });
 
 describe('GET /api/health', () => {
@@ -250,7 +261,7 @@ describe('GET /api/feeds/status/stream (Server-Sent Events)', () => {
     let buffer = '';
 
     /** Resolve with the next complete "status" event's data. */
-    async function nextStatus(): Promise<{ feeds: unknown[] }> {
+    async function nextStatus(): Promise<StatusEvent> {
       for (;;) {
         const end = buffer.indexOf('\n\n');
         if (end !== -1) {
@@ -281,7 +292,8 @@ describe('GET /api/feeds/status/stream (Server-Sent Events)', () => {
       expect(stream.res.headers.get('content-type')).toBe('text/event-stream');
 
       const first = await stream.nextStatus();
-      expect(first.feeds).toHaveLength(8);
+      expect(first.trigger).toBe('snapshot');
+      expect(first.snapshot.feeds).toHaveLength(8);
     } finally {
       await stream.close();
     }
@@ -296,7 +308,8 @@ describe('GET /api/feeds/status/stream (Server-Sent Events)', () => {
       await redis.publish(STATUS_CHANNEL, JSON.stringify({ tick: 1 }));
 
       const pushed = await stream.nextStatus();
-      expect(pushed.feeds).toHaveLength(8);
+      expect(pushed.trigger).toBe('tick');
+      expect(pushed.snapshot.feeds).toHaveLength(8);
     } finally {
       await stream.close();
     }

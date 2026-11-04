@@ -10,6 +10,14 @@ const STATUS_LABELS: Record<FeedHealth, string> = {
   unknown: 'No data',
 };
 
+/** How the data is arriving, shown under the tiles. */
+const FOOTER_TEXT: Record<LiveState, string> = {
+  live: 'pushed live by the server',
+  slow: 'live ticks paused; the server refreshes every 5s',
+  connecting: 'connecting…',
+  reconnecting: 'polling every 3s',
+};
+
 type Props = {
   selectedCode: string | null;
   onSelect: (code: string) => void;
@@ -22,7 +30,8 @@ type Props = {
  */
 export function FeedStatusGrid({ selectedCode, onSelect }: Props) {
   const liveState = useLiveFeedStatus();
-  const status = useFeedStatus({ live: liveState === 'live' });
+  // 'slow' still means connected: the stream delivers data, so don't poll.
+  const status = useFeedStatus({ live: liveState === 'live' || liveState === 'slow' });
   const feeds = status.data?.feeds ?? [];
 
   // If EVERY feed is stale, the problem is upstream (the monitoring pipeline
@@ -72,7 +81,7 @@ export function FeedStatusGrid({ selectedCode, onSelect }: Props) {
           </ul>
           <p className="meta">
             Updated {new Date(status.data.checkedAt).toLocaleTimeString()} ·{' '}
-            {liveState === 'live' ? 'pushed live by the server' : 'polling every 3s'}
+            {FOOTER_TEXT[liveState]}
           </p>
         </>
       )}
@@ -82,7 +91,12 @@ export function FeedStatusGrid({ selectedCode, onSelect }: Props) {
 
 /** "Live" when updates are being pushed; otherwise says what's happening. */
 function LiveBadge({ state }: { state: LiveState }) {
-  const label = { live: 'Live', connecting: 'Connecting…', reconnecting: 'Reconnecting…' }[state];
+  const label = {
+    live: 'Live',
+    slow: 'Live · ticks paused',
+    connecting: 'Connecting…',
+    reconnecting: 'Reconnecting…',
+  }[state];
   return (
     <span className="live-badge" data-state={state}>
       <span className="live-dot" aria-hidden="true" />

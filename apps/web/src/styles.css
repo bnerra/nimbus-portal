@@ -579,11 +579,13 @@ body {
   animation: live-pulse 2s ease-in-out infinite;
 }
 
-.live-badge[data-state='reconnecting'] {
+.live-badge[data-state='reconnecting'],
+.live-badge[data-state='slow'] {
   color: var(--degraded);
 }
 
-.live-badge[data-state='reconnecting'] .live-dot {
+.live-badge[data-state='reconnecting'] .live-dot,
+.live-badge[data-state='slow'] .live-dot {
   background: var(--degraded);
 }
 

@@ -17,36 +17,39 @@ shape: _plain English → what to say → likely follow-up_. New ideas for later
 > now: status, latency, message rates and gaps, with history charts. A Python service simulates eight
 > feeds, writing a health snapshot once a second into Postgres. A TypeScript/Express API summarizes
 > that data in SQL, and a React dashboard shows live status tiles and latency charts, and is honest
-> about stale data. Next I'm adding real-time push with server-sent events and Redis Pub/Sub, then
-> logins with each client seeing only their own feeds."
+> about stale data. Updates are pushed to the browser the moment they exist, using server-sent events,
+> with Redis Pub/Sub fanning each update out to every API instance. Next is logins, with each client
+> seeing only their own feeds."
 
 **Stack:** React 19 + Vite + TypeScript · TanStack Query · Recharts · Node/Express 5 + TypeScript ·
 zod · PostgreSQL 16 · Redis 7 · Python 3 (psycopg) · Docker Compose · Vitest + Supertest.
 
 ## The phases in one line each
 
-| Phase | Theme                                | One line                                                                                                                        |
-| ----- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | **Foundation**                       | Monorepo, API conventions (one error shape, input validation, migrations, dependency injection, real-DB tests), feed catalog UI |
-| 2     | **Data source**                      | Python simulator writing one health snapshot per feed per second, with injected incidents                                       |
-| 3     | **Live dashboard**                   | SQL endpoints that summarize the data; a UI that polls, caches and visualizes it, with honest staleness                         |
-| 4     | **Real-time** _(next)_               | The server pushes updates (SSE + Redis Pub/Sub) instead of the browser asking                                                   |
-| 5     | **Auth & multi-tenancy** _(planned)_ | Logins; each client organization sees only its own subscriptions                                                                |
+| Phase | Theme                             | One line                                                                                                                        |
+| ----- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | **Foundation**                    | Monorepo, API conventions (one error shape, input validation, migrations, dependency injection, real-DB tests), feed catalog UI |
+| 2     | **Data source**                   | Python simulator writing one health snapshot per feed per second, with injected incidents                                       |
+| 3     | **Live dashboard**                | SQL endpoints that summarize the data; a UI that polls, caches and visualizes it, with honest staleness                         |
+| 4     | **Real-time**                     | The server pushes updates (SSE + Redis Pub/Sub) instead of the browser asking; works across API instances                       |
+| 5     | **Auth & multi-tenancy** _(next)_ | Logins; each client organization sees only its own subscriptions                                                                |
 
-## Architecture (as of Phase 3)
+## Architecture (as of Phase 4)
 
 ```
-                       ┌────────────────────────── Docker Compose ──┐
-Python simulator ──writes 1 row/feed/sec──► PostgreSQL               │
-                                               ▲          Redis      │
-                                               │ SQL        ▲ (ping  │
-React (Vite) ──/api, polling──► Express API ───┘            │  only, │
-  └ TanStack Query cache                     └──────────────┘  so far)
-                       └────────────────────────────────────────────┘
+                ┌─────────────────────────── Docker Compose ───────────────────┐
+Python simulator ──1. write 1 row/feed/sec──► PostgreSQL ◄──3. read status once──┐
+       │                                                                         │
+       └──2. PUBLISH "new data" ──► Redis Pub/Sub ──fan-out──► API #1, API #2 ───┘
+                └──────────────────────────────────────────────────────────────┘
+                                                                  │ 4. SSE push
+React (Vite) ◄────────────────────────────────────────────────────┘
+  └ TanStack Query cache (filled by the stream; polling only as a fallback)
 ```
 
-Phase 4 changes the left side: the API pushes over SSE, with Redis Pub/Sub carrying updates between
-API instances.
+In production a **load balancer** (e.g. AWS ALB, Nginx) would sit in front of the API instances and
+spread browsers across them. Locally there isn't one: pointing each dev server at a different API
+does that job by hand.
 
 ---
 
@@ -116,7 +119,9 @@ naming things."_ Both tools give the same two answers: **expire after time** (`s
   instantly to whoever is listening, nothing stored, missed if you weren't tuned in.
 - **Streams** are a durable log, Redis's answer to Kafka-style "catch up later".
 
-**In this project:** Redis is only health-checked so far. Its first real job (Phase 4) is Pub/Sub.
+**In this project:** Redis Pub/Sub carries the simulator's "new data is ready" nudge to every API
+instance (Phase 4). The general connection also backs the health check. A subscribed connection can
+_only_ listen, so the API keeps two connections.
 
 ### Pub/sub vs message queue (SNS, SQS & friends)
 
@@ -148,11 +153,14 @@ None of these tools are "always" needed; each solves a problem that appears at a
 
 - **TanStack:** plain `fetch` in a small hook is fine for load-once data. It earns its place with
   polling, shared data and caching, which a live dashboard needs.
-- **Redis Pub/Sub:** with **one** API server, Node's built-in event emitter could broadcast updates
-  in-process. Redis becomes necessary with **several** API instances, which production always has.
+- **Redis Pub/Sub:** needed here because the producer (the simulator) is a **separate process**, so
+  the nudge has to cross processes, and with several API instances every one of them must hear it.
+  (An in-process event emitter only works when the producer lives _inside_ the API.)
 
-> "With one server I'd use an in-process event emitter; Redis is there because broadcasts have to
-> reach every API instance."
+> "The producer is a separate service, so I needed cross-process messaging even with one API. Redis
+> Pub/Sub does that and also fans out to every API instance. An alternative is Postgres
+> LISTEN/NOTIFY, since we already have Postgres. It's simpler to run, but it ties messaging to database
+> connections, while Redis keeps them separate and scales further."
 
 ### Do the heavy lifting where the data lives
 
@@ -183,6 +191,97 @@ SQL cheat sheet in `phase-3-walkthrough.md`).
 > keyboard focus, Enter/Space and screen-reader support come built in; a clickable `<div>` gives none
 > of that. Color is never the only signal: every status dot has a text label."
 
+### Server-Sent Events vs WebSockets vs polling
+
+|                | Direction               | Transport                              | Reconnect                     | Fits when                                                                    |
+| -------------- | ----------------------- | -------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------- |
+| **Polling**    | browser asks on a timer | normal HTTP requests                   | n/a                           | simple, infrequent updates; a good fallback                                  |
+| **SSE**        | server → browser only   | one long-lived HTTP response           | **automatic** (`EventSource`) | the server announces, the browser listens (dashboards, feeds, notifications) |
+| **WebSockets** | both ways               | its own protocol after an HTTP upgrade | you build it                  | both sides talk constantly (chat, games, collaborative editing)              |
+
+**What to say:**
+
+> "The dashboard only receives, so I used Server-Sent Events: plain HTTP, works through proxies,
+> and the browser reconnects automatically. WebSockets would be the choice if the client needed to
+> send a steady stream back."
+
+**The wire format** is plain text: `event: status`, a `data: {...}` line, and a blank line to end the
+message. `retry: 3000` tells the browser how long to wait before reconnecting.
+
+### Push when you can, pull when you must
+
+**Plain English.** The browser listens to the stream and drops each pushed snapshot straight into
+TanStack's cache (`queryClient.setQueryData`), under the same key the tiles already read. The tiles
+never know how the data arrived. If the stream drops, polling every 3 seconds takes over until it
+returns.
+
+> "I fed the SSE stream into the existing TanStack cache, so the UI components didn't change at all.
+> While the stream is up there's no polling; if it drops, the same query falls back to polling every
+> few seconds, and switches off again when the stream reconnects."
+
+**Gotcha worth knowing:** `EventSource` reconnects by itself when a connection _drops_, but gives up
+for good if the server answers with an _error_ (e.g. a proxy's 502 while the API restarts). The hook
+handles that case by starting over after a pause.
+
+### Snapshot + stream, nudges, heartbeats
+
+- **Commit, then notify.** The simulator publishes only _after_ its insert commits, so a listener can
+  never read the database too early.
+- **A nudge, not the data.** The Redis message just says "new data is ready"; the database stays the
+  source of truth. Each API reads the status **once per tick** and writes it to **all** its browsers
+  (100 tabs = 1 query). The alternative, a "fat" message carrying the data, saves those queries but
+  makes the message the source of truth, bringing back the missed-message problem.
+- **Snapshot, then stream.** Every new or reconnected browser gets the full current status
+  immediately, so nothing it missed matters. This is also why no "sticky sessions" are needed.
+- **Heartbeats, because silence is ambiguous.** If no nudge arrives for 5 seconds, the API sends a
+  snapshot anyway. That keeps stale detection working when the simulator stops, and keeps load
+  balancers (ALB idle timeout: 60 s by default) from closing a quiet connection.
+
+### Load balancer vs Redis: front side vs back side
+
+```
+browsers ──► [load balancer] ──┬──► API #1 ◄──┐
+                               └──► API #2 ◄──┴── [Redis Pub/Sub] ◄── simulator
+       "which server handles             "make sure EVERY server
+        this new connection?"             hears about each tick"
+```
+
+- **Load balancer** (AWS ALB, Nginx, the hosting platform): spreads **incoming connections**; stops
+  sending traffic to an instance that dies.
+- **Redis Pub/Sub**: spreads **messages** to **all** instances, so it doesn't matter where a browser
+  landed.
+
+> "Multiple API instances give reliability and capacity. A load balancer spreads browsers across them,
+> and Redis Pub/Sub makes sure every instance hears every update. The producer publishes once and
+> doesn't know or care how many instances exist; that decoupling is the point of pub/sub."
+
+### Long-lived connections change the rules
+
+- **Shutdown must end them.** `server.close()` waits for open connections, and a stream never
+  finishes, so the API ends its streams first or Ctrl+C would hang.
+- **Don't block startup on an optional dependency.** Awaiting the Redis subscription at startup would
+  hang the whole API if Redis were down. Instead the API starts, reports Redis as down on
+  `/api/health`, and subscribes when Redis returns. _Report problems; don't hang on them._
+- **Degrade, don't crash.** Redis down: updates slow to the 5-second heartbeat. One API down: only its
+  browsers reconnect.
+
+### Tenant isolation (Phase 5 preview)
+
+Today every browser sees the same 8 feeds. With logins, each **organization** sees only the feeds it
+subscribes to.
+
+- **The facts are shared** (NYSE's latency is the same for everyone); **visibility differs**.
+- So the broadcaster still reads the status **once per tick**, then filters it **per connection**
+  before writing. Each connection remembers which organization it belongs to.
+- **Filter on the server, never in the browser.** Sending all feeds and hiding some would leak other
+  clients' data to anyone opening the Network tab.
+- `EventSource` can't send custom headers (no `Authorization: Bearer ...`), which points toward
+  **cookie-based sessions** for Phase 5.
+
+> "Tenant isolation means one client's data never leaves the server for another client. Feed health is
+> global, so I compute it once, but each live connection is tagged with its organization and gets a
+> filtered copy."
+
 ---
 
 ## My background → this project
@@ -210,6 +309,11 @@ doing one job outside the API.
 - `ECONNREFUSED` almost always means the thing you're connecting to isn't running (Docker, the API).
 - Read errors literally: _"must appear in the GROUP BY clause or be used in an aggregate function"_ is
   the rule itself.
+- When a change keeps getting **undone on save**, look for **two tools claiming the same job** (two
+  import sorters, two formatters). Fix: name the owner explicitly, e.g.
+  `"source.organizeImports.ruff"`.
+- Before blaming new code, check the **inputs are actually flowing**. (A "push only every 5 s" scare
+  turned out to be the simulator not running, so only heartbeats were arriving.)
 
 ---
 
@@ -221,6 +325,8 @@ Ideas for after Phase 5 (decide then):
   to SQS queues for a "notifier" worker (fake email inbox) and an "audit" worker (incidents table).
   Stop a worker, cause an outage, restart it: the message is still waiting. Add a dead-letter queue.
   Locally via LocalStack (check its current free tier) or ElasticMQ.
+- **A real local load balancer:** Nginx in `docker-compose.yml` spreading traffic over two API
+  instances (fits the Docker/deploy phase).
 - Phases 6–8 from the original plan.
 - Deploy, then present the project on **nberra.dev**.
 

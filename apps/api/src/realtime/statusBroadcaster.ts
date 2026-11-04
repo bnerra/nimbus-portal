@@ -1,7 +1,7 @@
 import type { Response } from 'express';
 import type { Redis } from 'ioredis';
 import type pg from 'pg';
-import { fetchFeedStatus } from '../db/feedStatus.js';
+import { fetchFeedStatus, type FeedStatusSnapshot } from '../db/feedStatus.js';
 
 // The "radio frequency". Must match STATUS_CHANNEL in apps/simulator/publisher.py.
 export const STATUS_CHANNEL = 'nimbus:feed-status';
@@ -11,6 +11,12 @@ export const STATUS_CHANNEL = 'nimbus:feed-status';
 // the stale flags from SQL show up, and keeps idle connections from being
 // closed by proxies.
 const HEARTBEAT_MS = 5_000;
+
+/** Why an event was sent. The browser uses this to tell "live" from "only heartbeats". */
+export type StatusTrigger = 'snapshot' | 'tick' | 'heartbeat';
+
+/** What each SSE "status" event carries: the reason, plus the data itself. */
+export type StatusEvent = { trigger: StatusTrigger; snapshot: FeedStatusSnapshot };
 
 /**
  * Pushes live feed status to every connected browser using Server-Sent Events.
@@ -39,10 +45,10 @@ export class StatusBroadcaster {
    * keeps retrying and subscribes as soon as it's back.
    */
   async start(): Promise<void> {
-    this.subscriber.on('message', () => void this.broadcast());
+    this.subscriber.on('message', () => void this.broadcast('tick'));
 
     this.heartbeat = setInterval(() => {
-      if (Date.now() - this.lastSentAt >= HEARTBEAT_MS) void this.broadcast();
+      if (Date.now() - this.lastSentAt >= HEARTBEAT_MS) void this.broadcast('heartbeat');
     }, 1_000);
 
     await this.subscriber.subscribe(STATUS_CHANNEL);
@@ -63,7 +69,7 @@ export class StatusBroadcaster {
     // Snapshot first, then live updates: a newly connected (or reconnected)
     // browser is immediately up to date, no matter what it missed.
     res.write('retry: 3000\n\n'); // tells the browser: reconnect after 3s if dropped
-    res.write(toEvent(snapshot));
+    res.write(toEvent({ trigger: 'snapshot', snapshot }));
 
     // First listener after a quiet spell: it just got a snapshot, so don't
     // let the heartbeat send an identical one a moment later.
@@ -78,11 +84,12 @@ export class StatusBroadcaster {
   }
 
   /** Read the latest status once and send it to every client. */
-  private async broadcast(): Promise<void> {
+  private async broadcast(trigger: StatusTrigger): Promise<void> {
     if (this.clients.size === 0) return; // nobody listening: skip the query
     this.lastSentAt = Date.now();
     try {
-      const event = toEvent(await fetchFeedStatus(this.pool));
+      const snapshot = await fetchFeedStatus(this.pool);
+      const event = toEvent({ trigger, snapshot });
       for (const res of this.clients) res.write(event);
     } catch (err) {
       // Keep the streams open; the next nudge or heartbeat will try again.
@@ -104,9 +111,9 @@ export class StatusBroadcaster {
  * line, and a blank line that marks the end of the message.
  *
  *   event: status
- *   data: {"checkedAt":"...","feeds":[...]}
+ *   data: {"trigger":"tick","snapshot":{...}}
  *
  */
-function toEvent(snapshot: unknown): string {
-  return `event: status\ndata: ${JSON.stringify(snapshot)}\n\n`;
+function toEvent(event: unknown): string {
+  return `event: status\ndata: ${JSON.stringify(event)}\n\n`;
 }

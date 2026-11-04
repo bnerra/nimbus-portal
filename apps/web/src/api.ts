@@ -48,6 +48,12 @@ export type FeedStatus = {
 
 export type FeedStatusResponse = { checkedAt: string; feeds: FeedStatus[] };
 
+/** Why the server sent a live status event (see GET /api/feeds/status/stream). */
+export type StatusTrigger = 'snapshot' | 'tick' | 'heartbeat';
+
+/** One live status event: the reason it was sent, plus the data. */
+export type StatusEvent = { trigger: StatusTrigger; snapshot: FeedStatusResponse };
+
 /** One time bucket of a feed's history (see GET /api/feeds/:code/metrics). */
 export type MetricPoint = {
   t: string;
