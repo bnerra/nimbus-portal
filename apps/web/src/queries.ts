@@ -10,6 +10,7 @@ import { api, type Region } from './api';
  * feed list gets its own cache entry.
  */
 export const queryKeys = {
+  allFeedMetrics: ['feedMetrics'] as const,
   health: ['health'] as const,
   feeds: (region?: Region) => ['feeds', region ?? 'ALL'] as const,
   feedStatus: ['feedStatus'] as const,
@@ -63,13 +64,16 @@ export function useFeedStatus({ live }: { live: boolean }) {
 /**
  * One feed's latency history for the chart. Pass null when no feed is
  * selected: `enabled: false` tells TanStack not to fetch at all.
+ *
+ * While the live stream is connected, useLiveFeedStatus refreshes this query
+ * whenever new data is pushed, so the 5-second timer is only a fallback.
  */
-export function useFeedMetrics(code: string | null, minutes: number) {
+export function useFeedMetrics(code: string | null, minutes: number, { live }: { live: boolean }) {
   return useQuery({
     queryKey: queryKeys.feedMetrics(code ?? '', minutes),
     queryFn: ({ signal }) => api.getFeedMetrics(code!, minutes, signal),
     enabled: code !== null,
-    refetchInterval: 5_000,
+    refetchInterval: live ? false : 5_000,
     // Switching feed or range keeps the old chart on screen (dimmed) until
     // the new data arrives, instead of collapsing to "Loading…".
     placeholderData: keepPreviousData,

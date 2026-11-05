@@ -12,6 +12,7 @@ import {
 import type { MetricPoint } from '../api';
 import { formatLatency } from '../format';
 import { useFeedMetrics } from '../queries';
+import type { LiveState } from '../useLiveFeedStatus';
 
 const RANGES = [5, 15, 60] as const;
 type Range = (typeof RANGES)[number];
@@ -33,9 +34,18 @@ type ChartPoint = MetricPoint & { time: number };
 type Incident = { from: number; to: number; status: 'degraded' | 'down' };
 
 /** Latency over time for the feed selected in the status grid. */
-export function FeedLatencyChart({ code }: { code: string | null }) {
+export function FeedLatencyChart({
+  code,
+  liveState,
+}: {
+  code: string | null;
+  liveState: LiveState;
+}) {
   const [minutes, setMinutes] = useState<Range>(15);
-  const metrics = useFeedMetrics(code, minutes);
+  // Connected ('live' or 'slow') = pushes refresh the chart; otherwise poll.
+  const metrics = useFeedMetrics(code, minutes, {
+    live: liveState === 'live' || liveState === 'slow',
+  });
 
   // ---- 1. Prepare the data ----
   const data = metrics.data;

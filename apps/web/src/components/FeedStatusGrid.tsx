@@ -1,7 +1,7 @@
 import type { FeedHealth, FeedStatus } from '../api';
 import { formatLatency, formatRate } from '../format';
 import { useFeedStatus } from '../queries';
-import { type LiveState, useLiveFeedStatus } from '../useLiveFeedStatus';
+import { type LiveState } from '../useLiveFeedStatus';
 
 const STATUS_LABELS: Record<FeedHealth, string> = {
   up: 'Up',
@@ -19,6 +19,7 @@ const FOOTER_TEXT: Record<LiveState, string> = {
 };
 
 type Props = {
+  liveState: LiveState;
   selectedCode: string | null;
   onSelect: (code: string) => void;
 };
@@ -28,8 +29,7 @@ type Props = {
  * so tiles change as the simulator injects incidents.
  * Clicking a tile selects that feed for the latency chart.
  */
-export function FeedStatusGrid({ selectedCode, onSelect }: Props) {
-  const liveState = useLiveFeedStatus();
+export function FeedStatusGrid({ liveState, selectedCode, onSelect }: Props) {
   // 'slow' still means connected: the stream delivers data, so don't poll.
   const status = useFeedStatus({ live: liveState === 'live' || liveState === 'slow' });
   const feeds = status.data?.feeds ?? [];

@@ -15,6 +15,10 @@ const RECONNECT_MS = 3_000;
 // doesn't flip the badge.
 const TICKS_PAUSED_AFTER_MS = 10_000;
 
+// Pushes arrive every second, but the chart's buckets are 2-20 s wide, so
+// refreshing the chart on every push would mostly re-fetch the same numbers.
+const CHART_REFRESH_MIN_MS = 3_000;
+
 /**
  * Listens to the API's live status stream (Server-Sent Events) and drops each
  * snapshot straight into TanStack Query's cache, under the same key that
@@ -30,6 +34,7 @@ export function useLiveFeedStatus(): LiveState {
   // When the last 'tick' arrived. A ref, not state: changing it shouldn't
   // re-render anything by itself; it's only read when the next event arrives.
   const lastTickAt = useRef(0);
+  const lastChartRefreshAt = useRef(0);
 
   useEffect(() => {
     let source: EventSource | undefined;
@@ -44,6 +49,14 @@ export function useLiveFeedStatus(): LiveState {
         // Put the pushed snapshot in the cache, exactly as if a fetch had
         // returned it. Every component using this key re-renders.
         queryClient.setQueryData(queryKeys.feedStatus, snapshot);
+        // New data exists, so the chart's cached history is out of date.
+        // "Invalidate" = mark it stale; TanStack re-fetches it if a chart is
+        // on screen. Throttled, because pushes come far more often than the
+        // chart's buckets change.
+        if (Date.now() - lastChartRefreshAt.current >= CHART_REFRESH_MIN_MS) {
+          lastChartRefreshAt.current = Date.now();
+          void queryClient.invalidateQueries({ queryKey: queryKeys.allFeedMetrics });
+        }
 
         if (trigger === 'heartbeat') {
           // Only heartbeats lately? Then per-tick updates have paused.
