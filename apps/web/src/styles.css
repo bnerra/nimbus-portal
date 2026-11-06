@@ -547,6 +547,20 @@ body {
   }
 }
 
+/* Hidden on screen but still read by screen readers (the standard
+   "visually hidden" pattern; display: none would hide it from them too). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ---- Live badge ---------------------------------------------------------- */
 
 .live-badge {

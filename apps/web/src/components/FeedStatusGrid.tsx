@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import type { FeedHealth, FeedStatus } from '../api';
 import { formatLatency, formatRate } from '../format';
 import { useFeedStatus } from '../queries';
@@ -38,6 +39,9 @@ export function FeedStatusGrid({ liveState, selectedCode, onSelect }: Props) {
   // stopped), not eight simultaneous outages. Say that once, plainly.
   const allStale = feeds.length > 0 && feeds.every((f) => f.stale);
 
+    // A sentence for screen readers when a feed's status changes.
+  const announcement = useStatusAnnouncement(status.data?.feeds);
+
   return (
     <section className="card" aria-labelledby="status-heading">
       <div className="card-header">
@@ -45,6 +49,12 @@ export function FeedStatusGrid({ liveState, selectedCode, onSelect }: Props) {
           Live feed status <LiveBadge state={liveState} />
         </h2>
         {feeds.length > 0 && <StatusSummary feeds={feeds} />}
+      </div>
+      {/* Invisible on screen, but read aloud by screen readers whenever its
+          text changes. It must ALWAYS be rendered (even when empty): screen
+          readers only watch live regions that already existed. */}
+      <div className="visually-hidden" aria-live="polite">
+        {announcement}
       </div>
 
       {status.isError && (
@@ -190,4 +200,39 @@ function StatusSummary({ feeds }: { feeds: FeedStatus[] }) {
         ))}
     </div>
   );
+}
+
+/**
+ * Compares each new snapshot with the previous one and returns a sentence
+ * describing what changed, e.g. "At 8:52:03 PM: EUREX-EOBI is down." Stays
+ * the same when nothing changed, so screen readers aren't told about every
+ * one-second update, only about the moments that matter.
+ */
+function useStatusAnnouncement(feeds: FeedStatus[] | undefined): string {
+  // Last snapshot's status per feed code. A ref: remembering it shouldn't
+  // cause a re-render by itself.
+  const previous = useRef<Map<string, FeedHealth> | null>(null);
+  const [announcement, setAnnouncement] = useState('');
+
+  useEffect(() => {
+    if (!feeds) return;
+    const current = new Map(feeds.map((f) => [f.code, f.status]));
+    const before = previous.current;
+    previous.current = current;
+
+    // The very first data isn't a "change"; don't read out all 8 feeds.
+    if (!before) return;
+
+    const changes = feeds
+      .filter((f) => before.has(f.code) && before.get(f.code) !== f.status)
+      .map((f) => `${f.code} is ${STATUS_LABELS[f.status].toLowerCase()}`);
+
+    if (changes.length > 0) {
+      // The time makes each message unique: screen readers skip a live region
+      // update whose text is identical to the last one.
+      setAnnouncement(`At ${new Date().toLocaleTimeString()}: ${changes.join(', ')}.`);
+    }
+  }, [feeds]);
+
+  return announcement;
 }
